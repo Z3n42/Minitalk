@@ -7,13 +7,14 @@
 <p>
   <img src="https://img.shields.io/badge/Score-125%2F100-success?style=for-the-badge&logo=42" alt="42 Score"/>
   <img src="https://img.shields.io/badge/Language-C-00599C?style=for-the-badge&logo=c&logoColor=white" alt="Language"/>
+  <img src="https://img.shields.io/badge/Signals-SIGUSR1%20%26%20SIGUSR2-blue?style=for-the-badge" alt="Signals"/>
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
   <img src="https://img.shields.io/badge/42-Urduliz-000000?style=for-the-badge&logo=42&logoColor=white" alt="42 Urduliz"/>
 </p>
 
 *A client-server communication program using only UNIX signals (SIGUSR1 and SIGUSR2) to transmit strings bit by bit.*
 
-[Installation](#%EF%B8%8F-installation) • [Usage](#-usage) • [How It Works](#-how-it-works) • [Implementation](#-implementation-details)
+[Installation](#%EF%B8%8F-installation) • [Usage](#-usage) • [How It Works](#-how-it-works) • [Implementation](#-implementation-details) • [Testing](#-testing)
 
 </div>
 
@@ -29,6 +30,7 @@
 - [Project Structure](#-project-structure)
 - [Testing](#-testing)
 - [What I Learned](#-what-i-learned)
+- [Requirements](#-requirements)
 - [License](#-license)
 
 ---
@@ -39,14 +41,58 @@
 
 ### Why Minitalk?
 
-This project introduces fundamental concepts in systems programming:
-- **UNIX Signals** - Inter-process communication (IPC)
-- **Bitwise Operations** - Encoding characters as bits
-- **Signal Handlers** - Asynchronous event handling
-- **Process Communication** - PID-based messaging
-- **Binary Protocol** - Custom data transmission protocol
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🔄 Inter-Process Communication
+- **UNIX signals** as IPC mechanism
+- PID-based messaging
+- Process synchronization
+- Asynchronous event handling
+
+</td>
+<td width="50%" valign="top">
+
+### 🔢 Bitwise Operations
+- **Binary encoding** character representation
+- Bit-by-bit transmission
+- OR/XOR bit manipulation
+- 8-bit protocol implementation
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### ⚙️ Signal Handling
+- **signal()** vs **sigaction()**
+- Custom signal handlers
+- Static variable persistence
+- Handler state management
+
+</td>
+<td width="50%" valign="top">
+
+### 🎯 Protocol Design
+- **Binary protocol** with 2 signals
+- Timing synchronization (usleep)
+- Acknowledgment system (bonus)
+- Multi-client handling
+
+</td>
+</tr>
+</table>
+
+### The Challenge
 
 The constraint of using only two signals forces you to transmit each character **bit by bit**, creating a custom binary protocol.
+
+**Communication Flow**:
+```
+Client → 8 signals per character → Server
+        (SIGUSR1 = bit 1, SIGUSR2 = bit 0)
+```
 
 ---
 
@@ -135,7 +181,7 @@ The client will print `OK` for each successfully received character.
 
 ### Communication Protocol
 
-Since you can only use `SIGUSR1` and `SIGUSR2`, characters are transmitted **bit by bit**:
+Since you can only use `SIGUSR1` and `SIGUSR2`, characters are transmitted **bit by bit**.
 
 #### Binary Representation
 
@@ -173,15 +219,15 @@ Client                          Server
 
 ### Algorithm Overview
 
-**Client:**
+**Client Process**:
 1. Convert server PID from string to integer
 2. For each character in the message:
-   - For each of the 8 bits:
+   - For each of the 8 bits (MSB to LSB):
      - Check if bit is 1 or 0
      - Send `SIGUSR1` (bit = 1) or `SIGUSR2` (bit = 0)
      - Wait 50 microseconds (timing synchronization)
 
-**Server:**
+**Server Process**:
 1. Display its PID
 2. Register signal handlers for `SIGUSR1` and `SIGUSR2`
 3. Enter infinite loop with `pause()`
@@ -191,13 +237,38 @@ Client                          Server
    - Output character to stdout
    - Send acknowledgment (bonus)
 
+### Bit Manipulation Strategy
+
+**Why start with 255 (0xFF)?**
+
+Starting with all bits set to 1 simplifies the logic:
+- **SIGUSR1** → Keep bit as 1 (OR operation)
+- **SIGUSR2** → Flip bit to 0 (XOR operation)
+
+**Example:**
+```
+Initial:  c = 255  (11111111)
+
+Receive SIGUSR2:
+c = c ^ (128 >> 0)  →  11111111 ^ 10000000 = 01111111
+
+Receive SIGUSR1:
+c = c | (128 >> 1)  →  01111111 | 01000000 = 01111111
+
+Receive SIGUSR2:
+c = c ^ (128 >> 2)  →  01111111 ^ 00100000 = 01011111
+
+Result: 'A' = 01000001 (65)
+```
+
 ---
 
 ## 💻 Implementation Details
 
 ### Server Implementation
 
-#### Mandatory Version
+<details>
+<summary><b>Mandatory Version (signal())</b></summary>
 
 ```c
 #include <signal.h>
@@ -251,7 +322,10 @@ int main(void)
 - **Initialization**: `c = 255` (0xFF) sets all bits to 1
 - **`pause()`**: Suspends process until signal received
 
-#### Bonus Version (with ACK)
+</details>
+
+<details>
+<summary><b>Bonus Version (sigaction() with ACK)</b></summary>
 
 ```c
 void ft_handler1(int sig, siginfo_t *sigact, void *context)
@@ -314,9 +388,12 @@ int main(void)
 - **`kill(sigact->si_pid, SIGUSR1)`**: Send ACK back to client
 - **`usleep(50)`**: Timing delay in handler
 
+</details>
+
 ### Client Implementation
 
-#### Mandatory Version
+<details>
+<summary><b>Mandatory Version</b></summary>
 
 ```c
 int main(int argc, char **argv)
@@ -359,7 +436,10 @@ int main(int argc, char **argv)
 - **Timing**: `usleep(50)` microseconds between signals
 - **Loop**: 8 iterations per character
 
-#### Bonus Version (with ACK)
+</details>
+
+<details>
+<summary><b>Bonus Version (with ACK)</b></summary>
 
 ```c
 void ft_handler2(int sig)
@@ -408,28 +488,43 @@ int main(int argc, char **argv)
 - **`pause()`**: Waits for server acknowledgment after each bit
 - **Synchronization**: Ensures reliable transmission
 
+</details>
+
 ### Bit Manipulation Explained
 
-#### Setting Bit to 1 (OR operation)
+<details>
+<summary><b>Setting Bit to 1 (OR operation)</b></summary>
+
 ```c
-c = 255;        // 11111111 (all bits set)
-c = c | (128 >> 0);  // 11111111 | 10000000 = 11111111
-c = c | (128 >> 1);  // 11111111 | 01000000 = 11111111
+c = 255;              // 11111111 (all bits set)
+c = c | (128 >> 0);   // 11111111 | 10000000 = 11111111
+c = c | (128 >> 1);   // 11111111 | 01000000 = 11111111
 ```
 
-#### Setting Bit to 0 (XOR operation)
+**Logic**: OR with 1 keeps the bit as 1 (idempotent).
+
+</details>
+
+<details>
+<summary><b>Setting Bit to 0 (XOR operation)</b></summary>
+
 ```c
-c = 255;        // 11111111
-c = c ^ (128 >> 0);  // 11111111 ^ 10000000 = 01111111 (bit 7 cleared)
-c = c ^ (128 >> 2);  // 01111111 ^ 00100000 = 01011111 (bit 5 cleared)
+c = 255;              // 11111111
+c = c ^ (128 >> 0);   // 11111111 ^ 10000000 = 01111111 (bit 7 cleared)
+c = c ^ (128 >> 2);   // 01111111 ^ 00100000 = 01011111 (bit 5 cleared)
 ```
 
-### Why Start with 255?
+**Logic**: XOR with 1 flips the bit (from 1 to 0).
 
-Starting with `c = 255` (all bits set to 1) allows:
-- **OR operation** keeps bits that are already 1
-- **XOR operation** flips bits to 0
-- Simple logic: `SIGUSR1` = keep 1, `SIGUSR2` = flip to 0
+</details>
+
+### Timing Synchronization
+
+**Why 50 microseconds?**
+- **Balance**: Speed vs reliability
+- **Too fast**: Signals might be lost or reordered
+- **Too slow**: Violates performance requirement (< 1s for 100 chars)
+- **Formula**: 8 bits × 50μs = 400μs per character → 100 chars in 40ms
 
 ---
 
@@ -441,26 +536,54 @@ minitalk/
 ├── 📄 Makefile              # Build configuration
 ├── 📄 server.c              # Server implementation (mandatory)
 ├── 📄 client.c              # Client implementation (mandatory)
+│
 ├── 📂 libft/                # Custom C library
 │   ├── libft.h
 │   ├── libft.a
-│   └── (libft sources)
+│   ├── ft_atoi.c
+│   ├── ft_printf.c
+│   └── ... (other libft functions)
+│
 └── 📂 Bonus/                # Bonus implementations
     ├── Makefile
     ├── server.c             # Server with ACK (sigaction)
     └── client.c             # Client with ACK (pause)
 ```
 
-### File Descriptions
+### File Breakdown
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `server.c` (mandatory) | ~45 | Signal handling with `signal()`, bit reconstruction |
-| `client.c` (mandatory) | ~50 | Bit transmission with `kill()`, timing with `usleep()` |
-| `server.c` (bonus) | ~55 | Advanced signal handling with `sigaction()`, ACK sending |
-| `client.c` (bonus) | ~55 | ACK reception, synchronized transmission with `pause()` |
+<table>
+<tr>
+<th>File</th>
+<th>Lines</th>
+<th>Purpose</th>
+</tr>
+<tr>
+<td><code>server.c</code> (mandatory)</td>
+<td>~45</td>
+<td>Signal handling with signal(), bit reconstruction</td>
+</tr>
+<tr>
+<td><code>client.c</code> (mandatory)</td>
+<td>~50</td>
+<td>Bit transmission with kill(), timing with usleep()</td>
+</tr>
+<tr>
+<td><code>server.c</code> (bonus)</td>
+<td>~55</td>
+<td>Advanced signal handling with sigaction(), ACK sending</td>
+</tr>
+<tr>
+<td><code>client.c</code> (bonus)</td>
+<td>~55</td>
+<td>ACK reception, synchronized transmission with pause()</td>
+</tr>
+</table>
 
-### Makefile Structure
+**Total**: 4 source files (2 mandatory + 2 bonus) + libft integration
+
+<details>
+<summary><b>Makefile</b></summary>
 
 ```makefile
 SERVER = server
@@ -472,21 +595,25 @@ LIBFT = -Llibft -lft
 all: pre $(SERVER) $(CLIENT)
 
 $(SERVER): server.o
-    $(CC) $(CFLAGS) $^ $(LIBFT) -o $@
+	$(CC) $(CFLAGS) $^ $(LIBFT) -o $@
 
 $(CLIENT): client.o
-    $(CC) $(CFLAGS) $^ $(LIBFT) -o $@
+	$(CC) $(CFLAGS) $^ $(LIBFT) -o $@
 
 pre:
-    $(MAKE) -C ./libft
+	$(MAKE) -C ./libft
 
 clean:
-    $(MAKE) clean -C ./libft
-    $(RM) server.o client.o
+	$(MAKE) clean -C ./libft
+	$(RM) server.o client.o
 
 fclean: clean
-    $(RM) $(SERVER) $(CLIENT)
-    $(MAKE) fclean -C ./libft
+	$(RM) $(SERVER) $(CLIENT)
+	$(MAKE) fclean -C ./libft
+
+re: fclean all
+
+.PHONY: all clean fclean re pre
 ```
 
 **Key features:**
@@ -494,52 +621,56 @@ fclean: clean
 - Builds two separate executables
 - Links with libft (`-Llibft -lft`)
 
+</details>
+
 ---
 
 ## 🧪 Testing
 
-### Basic Testing
+### Test Categories
 
-```bash
-# Terminal 1: Start server
-./server
-# Output: 12345
-
-# Terminal 2: Send message
-./client 12345 "Hello World"
-```
-
-### Test Cases
-
-#### 1. Simple ASCII
-```bash
-./client [PID] "abc123"
-# Expected: abc123
-```
-
-#### 2. Special Characters
-```bash
-./client [PID] "Hello, 42!"
-# Expected: Hello, 42!
-```
-
-#### 3. Spaces and Punctuation
-```bash
-./client [PID] "Test   with   spaces..."
-# Expected: Test   with   spaces...
-```
-
-#### 4. Long Messages
-```bash
-./client [PID] "$(python3 -c 'print("A"*100)')"
-# Expected: 100 A's
-```
-
-#### 5. Unicode (Bonus)
-```bash
-./client [PID] "¡Hola! 你好 🚀"
-# Expected: Unicode characters displayed
-```
+<table>
+<tr>
+<th>Test Type</th>
+<th>Command</th>
+<th>Expected Result</th>
+</tr>
+<tr>
+<td><b>Simple ASCII</b></td>
+<td><code>./client [PID] "abc123"</code></td>
+<td>abc123</td>
+</tr>
+<tr>
+<td><b>Special Chars</b></td>
+<td><code>./client [PID] "Hello, 42!"</code></td>
+<td>Hello, 42!</td>
+</tr>
+<tr>
+<td><b>Spaces</b></td>
+<td><code>./client [PID] "Test   spaces"</code></td>
+<td>Test   spaces</td>
+</tr>
+<tr>
+<td><b>Long Message</b></td>
+<td><code>./client [PID] "$(python3 -c 'print("A"*100)')"</code></td>
+<td>100 A's</td>
+</tr>
+<tr>
+<td><b>Unicode (Bonus)</b></td>
+<td><code>./client [PID] "¡Hola! 你好 🚀"</code></td>
+<td>Unicode characters</td>
+</tr>
+<tr>
+<td><b>Empty String</b></td>
+<td><code>./client [PID] ""</code></td>
+<td>No output</td>
+</tr>
+<tr>
+<td><b>Newlines</b></td>
+<td><code>./client [PID] $'Line1\nLine2'</code></td>
+<td>Line1<br>Line2</td>
+</tr>
+</table>
 
 ### Performance Testing
 
@@ -549,6 +680,10 @@ time ./client [PID] "$(python3 -c 'print("x"*100)')"
 
 # Should be < 1 second (subject requirement)
 ```
+
+**Calculation**:
+- 100 characters × 8 bits × 50 microseconds = 40 milliseconds
+- Well within the 1-second requirement
 
 ### Stress Testing
 
@@ -560,7 +695,10 @@ time ./client [PID] "$(python3 -c 'print("x"*100)')"
 wait
 ```
 
-### Debugging
+**Note**: Messages may interleave without proper synchronization.
+
+<details>
+<summary><b>Debugging Commands</b></summary>
 
 ```bash
 # Compile with debug symbols
@@ -569,13 +707,44 @@ gcc -g -Wall -Wextra -Werror client.c -Llibft -lft -o client
 
 # Run with gdb
 gdb ./server
+
+# Trace signals
+strace -e signal ./server
+
+# Check for memory leaks
+valgrind ./server
+```
+
+</details>
+
+### Test Script
+
+```bash
+#!/bin/bash
+
+PID=$(./server &)
+sleep 1
+
+echo "Test 1: Simple message"
+./client $PID "Hello"
+
+echo "Test 2: Numbers"
+./client $PID "123456789"
+
+echo "Test 3: Special characters"
+./client $PID "!@#$%^&*()"
+
+echo "Test 4: Long message"
+./client $PID "$(python3 -c 'print("A"*100)')"
+
+kill $PID
 ```
 
 ---
 
 ## 💡 What I Learned
 
-Through this project, I gained understanding of:
+Through this project, deep understanding was gained in:
 
 - ✅ **UNIX Signals**: `SIGUSR1`, `SIGUSR2`, `kill()`, `signal()`, `sigaction()`
 - ✅ **Signal Handlers**: Asynchronous event handling with static variables
@@ -589,16 +758,48 @@ Through this project, I gained understanding of:
 
 ### Key Challenges
 
-1. **Bit Transmission**: Converting characters to bits and reconstructing them
-2. **Timing Issues**: Finding right `usleep()` delay for reliable transmission
-3. **Static Variables**: Understanding persistence across function calls
-4. **Signal Ordering**: Ensuring bits arrive in correct order
-5. **Multiple Clients**: Handling overlapping transmissions (bonus)
-6. **Unicode Support**: Dealing with multi-byte characters (bonus)
+<table>
+<tr>
+<th>Challenge</th>
+<th>Solution Implemented</th>
+</tr>
+<tr>
+<td><b>Bit Transmission</b></td>
+<td>Convert characters to bits using bitwise AND, transmit MSB first</td>
+</tr>
+<tr>
+<td><b>Bit Reconstruction</b></td>
+<td>Initialize with 255, use OR for 1 bits, XOR for 0 bits</td>
+</tr>
+<tr>
+<td><b>Timing Issues</b></td>
+<td>Found optimal usleep(50) delay through testing</td>
+</tr>
+<tr>
+<td><b>Static Variables</b></td>
+<td>Use static int count and c to persist across handler calls</td>
+</tr>
+<tr>
+<td><b>Signal Ordering</b></td>
+<td>Synchronization with usleep() ensures correct bit order</td>
+</tr>
+<tr>
+<td><b>Multiple Clients</b></td>
+<td>Bonus: ACK system with sigaction() and pause() for synchronization</td>
+</tr>
+<tr>
+<td><b>Unicode Support</b></td>
+<td>Bonus: Multi-byte UTF-8 characters transmitted bit by bit</td>
+</tr>
+<tr>
+<td><b>ACK System</b></td>
+<td>Bonus: Server sends SIGUSR1 back to client using si_pid from siginfo_t</td>
+</tr>
+</table>
 
 ### Design Decisions
 
-**Why initialize with 255?**
+**Why initialize with 255 (0xFF)?**
 - Starting with all bits set (1) simplifies logic
 - OR keeps 1, XOR flips to 0
 - Alternative: start with 0 and use different operations
@@ -607,11 +808,19 @@ Through this project, I gained understanding of:
 - Balance between speed and reliability
 - Too fast: signals might be lost
 - Too slow: violates performance requirement (< 1s for 100 chars)
+- Formula: 100 chars × 8 bits × 50μs = 40ms
 
 **Why `pause()` in bonus?**
-- Synchronizes client/server
+- Synchronizes client/server communication
 - Ensures reliable transmission
-- Allows multiple concurrent clients
+- Allows multiple concurrent clients without interference
+- Client waits for ACK before sending next bit
+
+**Why `sigaction()` over `signal()` in bonus?**
+- Access to `siginfo_t` struct with sender's PID
+- More portable and reliable
+- Allows setting `SA_SIGINFO` flag
+- Better for modern systems
 
 ---
 
@@ -625,15 +834,25 @@ Through this project, I gained understanding of:
 - ✅ Server can receive from multiple clients without restart
 - ✅ Fast transmission (< 1 second for 100 characters)
 - ✅ Executables named `server` and `client`
+- ✅ Error handling for invalid arguments
+- ✅ No memory leaks
 
 ### Bonus
 
 - ✅ Acknowledgment system (server confirms receipt)
 - ✅ Unicode character support
+- ✅ Use `sigaction()` instead of `signal()`
+- ✅ Client receives confirmation after each character
 
 ### Allowed Functions
 
 - `write`, `signal`, `sigemptyset`, `sigaddset`, `sigaction`, `kill`, `getpid`, `malloc`, `free`, `pause`, `sleep`, `usleep`, `exit`
+
+### Forbidden
+
+- ❌ Global variables (except for signal handlers)
+- ❌ Using functions outside the allowed list
+- ❌ Using pipes, shared memory, or other IPC mechanisms
 
 ---
 
